@@ -1,37 +1,76 @@
 import os
-import random
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
 TOKEN = os.getenv("BOT_TOKEN")
 
+# Store REAL results here as they are recorded.
+results = []
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "✈️ Aviator Signal Bot is online!\n\n"
-        "Tap /signal for a signal."
+        "✈️ AVIATOR SIGNAL BOT\n\n"
+        "Use /add 2.30 to record the real result.\n"
+        "Use /signal to calculate a signal from the recorded results."
     )
+
+
+async def add(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text("Use: /add 2.30")
+        return
+
+    try:
+        value = float(context.args[0])
+
+        if value < 1.00:
+            raise ValueError
+
+        results.append(value)
+
+        await update.message.reply_text(
+            f"✅ REAL RESULT RECORDED: {value:.2f}x\n"
+            f"📊 Results recorded: {len(results)}"
+        )
+
+    except ValueError:
+        await update.message.reply_text("Enter a valid multiplier, e.g. /add 2.30")
+
 
 async def signal(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Generates an illustrative statistical-style signal.
-    # It does NOT know the actual next Aviator result.
-    low = round(random.uniform(1.20, 1.80), 2)
-    high = round(random.uniform(2.00, 3.50), 2)
+    if not results:
+        await update.message.reply_text(
+            "❌ No real results available yet.\n"
+            "The bot cannot calculate a signal without data."
+        )
+        return
 
-    if high <= low:
-        high = round(low + 0.80, 2)
+    recent = results[-10:]
 
-    confidence = random.choice(["MEDIUM", "MEDIUM", "HIGH"])
+    average = sum(recent) / len(recent)
+    lowest = min(recent)
+    highest = max(recent)
 
-    message = (
+    # Deterministic calculation from REAL recorded results.
+    target_low = round(max(1.10, average * 0.85), 2)
+    target_high = round(average * 1.25, 2)
+
+    if len(recent) >= 5:
+        green = "🟢 GREEN SIGNAL"
+    else:
+        green = "🟡 LIMITED SIGNAL"
+
+    await update.message.reply_text(
         "✈️ AVIATOR SIGNAL\n\n"
-        "🟢 GREEN SIGNAL\n"
-        f"🎯 TARGET: {low:.2f}x – {high:.2f}x\n"
-        f"📊 CONFIDENCE: {confidence}\n\n"
-        "⚠️ This is an estimate only. "
-        "It cannot know or guarantee the next RNG result."
+        f"{green}\n"
+        f"🎯 TARGET: {target_low:.2f}x – {target_high:.2f}x\n\n"
+        f"📊 Based on {len(recent)} REAL recorded results\n"
+        f"📈 Average: {average:.2f}x\n"
+        f"⬇️ Low: {lowest:.2f}x\n"
+        f"⬆️ High: {highest:.2f}x"
     )
 
-    await update.message.reply_text(message)
 
 def main():
     if not TOKEN:
@@ -40,10 +79,12 @@ def main():
     app = Application.builder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("add", add))
     app.add_handler(CommandHandler("signal", signal))
 
     print("Bot is running...")
     app.run_polling()
+
 
 if __name__ == "__main__":
     main()
